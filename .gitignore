@@ -1,0 +1,11 @@
+# KHÔNG BAO GIỜ commit khoá Google / biến môi trường
+*.json.key
+*-sheets-*.json
+service-account*.json
+.env
+.env.*
+.vercel
+node_modules
+
+.vercel
+.env*

@@ -1,0 +1,8 @@
+{
+  "name": "tricao",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Quản lý lệnh sản xuất Trí Cao – web máy tính + ứng dụng điện thoại, dữ liệu Google Sheet",
+  "type": "module",
+  "engines": { "node": "22.x" }
+}

@@ -1,0 +1,24 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "outputDirectory": "public",
+  "redirects": [
+    { "source": "/", "has": [{ "type": "header", "key": "user-agent", "value": ".*(Android|iPhone|iPod|iPad|Mobile|Windows Phone|Opera Mini|IEMobile).*" }], "destination": "/m/", "permanent": false },
+    { "source": "/index.html", "has": [{ "type": "header", "key": "user-agent", "value": ".*(Android|iPhone|iPod|iPad|Mobile|Windows Phone|Opera Mini|IEMobile).*" }], "destination": "/m/", "permanent": false },
+    { "source": "/m", "missing": [{ "type": "header", "key": "user-agent", "value": ".*(Android|iPhone|iPod|iPad|Mobile|Windows Phone|Opera Mini|IEMobile).*" }], "destination": "/", "permanent": false },
+    { "source": "/m/", "missing": [{ "type": "header", "key": "user-agent", "value": ".*(Android|iPhone|iPod|iPad|Mobile|Windows Phone|Opera Mini|IEMobile).*" }], "destination": "/", "permanent": false },
+    { "source": "/m/index.html", "missing": [{ "type": "header", "key": "user-agent", "value": ".*(Android|iPhone|iPod|iPad|Mobile|Windows Phone|Opera Mini|IEMobile).*" }], "destination": "/", "permanent": false }
+  ],
+  "headers": [
+    { "source": "/(.*)", "headers": [
+      { "key": "X-Content-Type-Options", "value": "nosniff" },
+      { "key": "X-Frame-Options", "value": "DENY" },
+      { "key": "Referrer-Policy", "value": "same-origin" },
+      { "key": "X-Robots-Tag", "value": "noindex, nofollow" }
+    ]},
+    { "source": "/m/sw.js", "headers": [
+      { "key": "Cache-Control", "value": "no-cache" },
+      { "key": "Service-Worker-Allowed", "value": "/m/" }
+    ]}
+  ]
+}
