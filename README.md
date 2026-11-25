@@ -42,6 +42,47 @@ Có thể cho phép sửa không cần duyệt bằng biến môi trường `SUA
 | `_Thung_Rac` (ẩn) | Bản sao các dòng đã xoá |
 | `_Nhat_Ky` | Nhật ký đăng nhập, đề xuất, duyệt, khôi phục, đổi tài khoản |
 
+## Sản phẩm, BOM & tạo lệnh sản xuất từ BOM (chỉ máy tính)
+
+Hai tab mới trên trang máy tính: **Sản phẩm & BOM** và **Tạo lệnh SX từ BOM**. API `/api/bom`, `/api/lenh` từ chối mọi lời gọi từ ứng dụng điện thoại.
+
+### Quyền chức năng (gán từng tài khoản ở tab Tài khoản, quản trị có tất cả)
+
+| Quyền | Cho phép |
+|---|---|
+| `bom_up` | Upload BOM Excel, tạo sản phẩm |
+| `bom_sua` | Sửa BOM, sửa thông tin sản phẩm |
+| `bom_duyet` | Duyệt / từ chối BOM |
+| `lsx_tao` | Tạo lệnh SX từ BOM (xem trước → gửi duyệt) |
+| `lsx_duyet` | Phê duyệt / từ chối lệnh SX từ BOM |
+
+Người upload/sửa BOM và người tạo lệnh **không được tự duyệt**. Quyền lưu ở cột `Quyen` của `_Tai_Khoan` (tự thêm khi chạy lần đầu).
+
+### BOM
+
+1. **Upload**: chọn file `.xlsx` có sheet `QUY TRINH SAN XUAT` (mẫu BOM_V04xx). File được đọc ngay trên trình duyệt; cột được nhận theo tiêu đề
+   (Mã SP, Mã cụm, Mã phụ kiện, Tên chi tiết, Qui cách thành phẩm Dài/Rộng/dày/SLCT, Vật liệu, các cột công đoạn + ghi chú).
+   Ô công đoạn ghi số thứ tự; `1-3` = làm ở bước 1 và 3 (kể cả khi Excel tự đổi thành ngày). Dòng có Mã phụ kiện là chi tiết, dòng chỉ có Mã cụm là tiêu đề cụm.
+2. Mỗi lần upload tạo **phiên bản** `MãSP-PBnn` ở trạng thái **Chờ duyệt**. Khi duyệt, bản đó thành **hiện hành**, bản đã duyệt trước chuyển "Đã thay thế".
+3. **Sửa**: chỉ sửa phiên bản mới nhất. Nếu phiên bản đã nằm trong lệnh sản xuất (đã tạo hoặc đang chờ duyệt) → hệ thống **tự sao chép thành phiên bản cao hơn** rồi sửa trên bản mới;
+   nếu chưa dùng → sửa tại chỗ. Cả hai trường hợp đều quay về **Chờ duyệt**.
+
+### Lệnh sản xuất từ BOM
+
+1. Nhập số LSX (gợi ý `MOyymmNN-HT`), tên, ngày cấp, người cấp, hạn; chọn sản phẩm (BOM hiện hành) + số bộ → **Xem trước**.
+2. Phiếu gộp các chi tiết cùng **tên + vật liệu + độ dày + quy trình công đoạn**; mỗi sản phẩm là 1 dòng (`Nhãn = MãSP - Tên chi tiết`, `Tổng SL = SLCT × số bộ`).
+   Vật liệu phiếu = `VẬT LIỆU <dày>mm`; công đoạn lặp được đánh số (`CẮT VÁN 2`); tối đa 11 công đoạn (CD1–CD11).
+3. **Xác nhận & gửi duyệt** → lưu ở `_LSX_De_Xuat`. Người có quyền `lsx_duyet` (khác người tạo) xem lại bản tính lại từ BOM và **phê duyệt** →
+   ghi `LSX`, `Phieu_San_Xuat`, `Chi_Tiet_PSX`, `LSX_BOM` trong **một lần ghi nguyên tử**. Nếu BOM bị đổi sau khi đề xuất (so dấu vân tay nội dung) thì không cho duyệt.
+
+| Sheet mới | Nội dung |
+|---|---|
+| `San_Pham` | Mã, tên, quy cách, trạng thái sản phẩm |
+| `BOM_Phien_Ban` | Phiên bản BOM, trạng thái, người gửi/duyệt, dấu vân tay nội dung |
+| `BOM_Chi_Tiet` | Dòng BOM của từng phiên bản (quy trình dạng `A > B > C`) |
+| `_LSX_De_Xuat` | Đề xuất lệnh chờ phê duyệt |
+| `LSX_BOM` | Lệnh nào dùng phiên bản BOM nào (để khoá sửa) |
+
 ## Biến môi trường (Vercel → Settings → Environment Variables)
 
 | Tên | Giá trị |
@@ -73,9 +114,11 @@ api/            Vercel Functions (Node, không phụ thuộc thư viện ngoài)
   _lib/google.js   Google Sheets API + JWT service account, tự thử lại khi vượt hạn mức
   _lib/store.js    Sheet phụ, tài khoản, phiên, phân quyền, nhật ký
   _lib/lsx.js      Sửa / xoá dây chuyền / khôi phục
-  auth.js data.js requests.js accounts.js
+  _lib/bom.js      Sản phẩm, phiên bản BOM, gộp phiếu, ghi lệnh từ BOM
+  auth.js data.js requests.js accounts.js bom.js lenh.js
 public/
   index.html pc.js     Trang máy tính
+  bom.js xlsx-lite.js  Tab Sản phẩm & BOM, Tạo lệnh SX từ BOM; đọc file Excel trên trình duyệt
   m/                   Ứng dụng điện thoại (PWA: manifest, service worker, icon)
   shared/core.js       Hàm dùng chung, tính tiến độ
 ```

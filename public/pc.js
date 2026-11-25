@@ -106,6 +106,7 @@ function vaoApp() {
   document.querySelectorAll('[data-role]').forEach(b => { b.hidden = !can(U, b.dataset.role); });
   taiDuLieu(false);
   taiYC();
+  if (typeof bomVaoApp === 'function') bomVaoApp();   // module Sản phẩm / BOM / Tạo lệnh (bom.js)
 }
 
 /* ====================== Dữ liệu ====================== */
@@ -138,6 +139,8 @@ function chonTab(b) {
   if (b.dataset.tab === 'tabYC') taiYC();
   if (b.dataset.tab === 'tabTK') taiTK();
   if (b.dataset.tab === 'tabNK') taiNK();
+  if (b.dataset.tab === 'tabBOM') bomTai();
+  if (b.dataset.tab === 'tabLX') lxTai();
 }
 
 /* ====================== Tab 1: Lệnh sản xuất ====================== */
@@ -496,8 +499,9 @@ async function taiTK() {
   try { TK = await api('/api/accounts'); veTK(); } catch (e) { loi(e); }
 }
 function veTK() {
-  $('dsTK').innerHTML = '<table><thead><tr><th>Email</th><th>Họ tên</th><th>Vai trò</th><th>Nền tảng</th><th>Trạng thái</th><th>Ngày tạo</th><th></th></tr></thead><tbody>' +
+  $('dsTK').innerHTML = '<table><thead><tr><th>Email</th><th>Họ tên</th><th>Vai trò</th><th>Nền tảng</th><th>Quyền BOM / lệnh SX</th><th>Trạng thái</th><th>Ngày tạo</th><th></th></tr></thead><tbody>' +
     TK.list.map((a, i) => '<tr><td>' + esc(a.email) + '</td><td>' + esc(a.name) + '</td><td>' + esc(a.roleName) + '</td><td>' + esc(TK.platforms[a.platform] || a.platform) + '</td>' +
+      '<td class="wrap"><small>' + (a.role === 'admin' ? 'Tất cả (quản trị)' : esc((a.perms || []).map(p => TK.perms[p] || p).join(', ') || '—')) + '</small></td>' +
       '<td>' + (a.active ? '<span class="badge b-done">Hoạt động</span>' : '<span class="badge b-late">Đã khoá</span>') + '</td><td>' + esc(a.created) + '</td>' +
       '<td class="act"><button class="sm" onclick="suaTK(' + i + ')">Sửa</button></td></tr>').join('') + '</tbody></table>';
 }
@@ -512,14 +516,19 @@ function suaTK(i) {
       '<label>Vai trò<select id="tkR">' + opt(TK.roles, a ? a.role : 'xem') + '</select></label>' +
       '<label>Nền tảng<select id="tkP">' + opt(TK.platforms, a ? a.platform : 'mobile') + '</select></label>' +
       '<label>' + (a ? 'Đặt lại mật khẩu (để trống nếu không đổi)' : 'Mật khẩu (≥ 6 ký tự)') + '<input id="tkW" type="text" autocomplete="off"></label>' +
-      '<label style="flex-direction:row;align-items:center;gap:6px;margin-top:20px"><input type="checkbox" id="tkA"' + (!a || a.active ? ' checked' : '') + '> Đang hoạt động</label></div>',
+      '<label style="flex-direction:row;align-items:center;gap:6px;margin-top:20px"><input type="checkbox" id="tkA"' + (!a || a.active ? ' checked' : '') + '> Đang hoạt động</label>' +
+      '<label class="full">Quyền Sản phẩm / BOM / Tạo lệnh SX (chỉ dùng trên máy tính; quản trị có tất cả)<span class="perms">' +
+      Object.keys(TK.perms || {}).map(p => '<span><input type="checkbox" data-perm-cb="' + p + '"' + (a && (a.perms || []).includes(p) ? ' checked' : '') + '> ' + esc(TK.perms[p]) + '</span>').join('') +
+      '</span></label></div>' +
+      '<p class="muted">Người upload/sửa BOM và người tạo lệnh không được tự duyệt – cần ít nhất 2 người có quyền duyệt tương ứng.</p>',
     onOpen: m => {
       const e = m.querySelector('#tkE'), n = m.querySelector('#tkN');
       e.addEventListener('change', () => { const x = TK.nguoiDung.find(z => z.email.toLowerCase() === e.value.trim().toLowerCase()); if (x && !n.value) n.value = x.name; });
     },
     buttons: [{ t: 'Lưu', cls: 'pri', fn: async m => {
       const g = id => m.querySelector(id);
-      await api('/api/accounts', { body: { a: 'save', email: g('#tkE').value, name: g('#tkN').value, role: g('#tkR').value, platform: g('#tkP').value, password: g('#tkW').value, active: g('#tkA').checked } });
+      await api('/api/accounts', { body: { a: 'save', email: g('#tkE').value, name: g('#tkN').value, role: g('#tkR').value, platform: g('#tkP').value, password: g('#tkW').value, active: g('#tkA').checked,
+        perms: [...m.querySelectorAll('[data-perm-cb]')].filter(x => x.checked).map(x => x.dataset.permCb) } });
       toast('Đã lưu tài khoản'); taiTK();
     } }]
   });

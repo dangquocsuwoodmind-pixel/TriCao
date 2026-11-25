@@ -82,11 +82,17 @@ export function batchUpdate(requests) {
 }
 
 let metaCache = null;
+let gridCache = {};
 /** { tenSheet: sheetId } */
 export async function sheetMap(force = false) {
   if (metaCache && !force) return metaCache;
-  const j = await call('?fields=sheets.properties(sheetId,title)');
-  metaCache = {};
-  j.sheets.forEach(s => { metaCache[s.properties.title] = s.properties.sheetId; });
+  const j = await call('?fields=sheets.properties(sheetId,title,gridProperties(rowCount,columnCount))');
+  metaCache = {}; gridCache = {};
+  j.sheets.forEach(s => {
+    metaCache[s.properties.title] = s.properties.sheetId;
+    gridCache[s.properties.title] = { rows: s.properties.gridProperties?.rowCount || 0, cols: s.properties.gridProperties?.columnCount || 0 };
+  });
   return metaCache;
 }
+/** Số dòng / cột hiện có của sheet (sau khi đã gọi sheetMap). */
+export const gridOf = title => gridCache[title] || { rows: 0, cols: 0 };

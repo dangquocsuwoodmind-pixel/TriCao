@@ -1,11 +1,11 @@
 // /api/accounts – quản lý tài khoản & xem nhật ký (chỉ quản trị, chỉ trên máy tính).
 //   GET                    danh sách tài khoản + danh sách Nguoi_Dung (gợi ý)
 //   GET ?a=log             200 dòng nhật ký gần nhất
-//   POST {a:'save', email, name, role, platform, active, password?}
+//   POST {a:'save', email, name, role, platform, active, password?, perms?:['bom_up',...]}
 import { handler, body, needMethod, HttpError, nowVN } from './_lib/http.js';
 import { batchGet, q } from './_lib/google.js';
 import {
-  S, requireUser, readAccounts, saveAccount, hashPw, validPw, publicUser, toObjects, log, ROLES, PLATFORMS
+  S, requireUser, readAccounts, saveAccount, hashPw, validPw, publicUser, toObjects, log, ROLES, PLATFORMS, PERMS
 } from './_lib/store.js';
 
 export default handler(async (req) => {
@@ -19,7 +19,7 @@ export default handler(async (req) => {
     }
     const [nd] = await batchGet([q(S.nd)]);
     return {
-      ok: true, roles: ROLES, platforms: PLATFORMS,
+      ok: true, roles: ROLES, platforms: PLATFORMS, perms: PERMS,
       list: (await readAccounts(true)).map(publicUser),
       nguoiDung: toObjects(nd).map(o => ({ email: String(o.Ma_NV || '').trim(), name: o.Ho_Ten }))
     };
@@ -46,12 +46,13 @@ export default handler(async (req) => {
   if (email === u.email && (!active || b.role !== 'admin' || b.platform === 'mobile'))
     throw new HttpError(400, 'Không thể tự khoá, tự hạ quyền hoặc tự chặn truy cập máy tính của chính mình');
 
+  const perms = Array.isArray(b.perms) ? [...new Set(b.perms.filter(p => PERMS[p]))] : (old?.perms || []);
   const acc = {
-    ...(old || {}), email, name: String(b.name || '').trim() || email, role: b.role, platform: b.platform, active,
+    ...(old || {}), email, name: String(b.name || '').trim() || email, role: b.role, platform: b.platform, active, perms,
     hash: b.password ? hashPw(b.password) : old.hash, created: old?.created || nowVN(), note: String(b.note || old?.note || '').slice(0, 200)
   };
   await saveAccount(acc);
   await log(u, old ? 'SUA_TAI_KHOAN' : 'TAO_TAI_KHOAN', email,
-    { role: acc.role, platform: acc.platform, active, doiMatKhau: !!b.password });
+    { role: acc.role, platform: acc.platform, active, perms: perms.join(','), doiMatKhau: !!b.password });
   return { ok: true, user: publicUser(acc) };
 });

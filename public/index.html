@@ -151,6 +151,15 @@
   #auth h2{margin:0 0 4px;font-size:20px}
   #auth .form{grid-template-columns:1fr}
   #auth button{width:100%;margin-top:6px;padding:9px}
+  /* BOM */
+  tr.cum td{background:#f7f1ea;font-weight:600}
+  table.bomtb td{vertical-align:top}
+  table.bomed td{padding:4px}
+  table.bomed input,table.bomed select{font:inherit;padding:4px 6px;border:1px solid var(--line);border-radius:5px;width:100%}
+  table.bomed input.w-s{min-width:60px} table.bomed input.w-n{min-width:64px;text-align:right} table.bomed input.w-m{min-width:110px}
+  table.bomed input.w-l{min-width:190px} table.bomed input.w-xl{min-width:320px}
+  #lxSP td{border:0;padding:4px 8px 4px 0} #lxSP select,#lxSP input{font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:6px}
+  .perms{display:flex;flex-direction:column;gap:4px;font-weight:400;color:var(--text)}
   .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1d2733;color:#fff;padding:10px 16px;border-radius:8px;z-index:60;max-width:90%;white-space:pre-line}
 </style>
 </head>
@@ -170,6 +179,8 @@
     <button class="on" data-tab="tabLSX" onclick="chonTab(this)">Tình trạng lệnh sản xuất</button>
     <button data-tab="tabSL" onclick="chonTab(this)">Sản lượng theo ngày</button>
     <button data-tab="tabYC" onclick="chonTab(this)">Yêu cầu sửa / xoá <span class="cnt" id="cntYC" hidden></span></button>
+    <button data-tab="tabBOM" onclick="chonTab(this)">Sản phẩm &amp; BOM <span class="cnt" id="cntBOM" hidden></span></button>
+    <button data-tab="tabLX" onclick="chonTab(this)">Tạo lệnh SX từ BOM <span class="cnt" id="cntLX" hidden></span></button>
     <button data-tab="tabTK" onclick="chonTab(this)" data-role="admin" hidden>Tài khoản</button>
     <button data-tab="tabNK" onclick="chonTab(this)" data-role="admin" hidden>Nhật ký</button>
   </nav>
@@ -226,6 +237,34 @@
     <section class="card"><div class="scroll" id="dsYC"><div class="empty">Đang tải…</div></div></section>
   </div>
 
+  <!-- TAB: SẢN PHẨM & BOM -->
+  <div class="tab" id="tabBOM">
+    <section class="filters">
+      <input id="bomQ" placeholder="Tìm mã / tên sản phẩm, quy cách…" oninput="bomVe()" style="flex:1;min-width:220px">
+      <select id="bomLoc" onchange="bomVe()"><option value="">Tất cả sản phẩm</option><option value="cho">Có BOM chờ duyệt</option><option value="chua">Chưa có BOM hiện hành</option><option value="ngung">Đã ngừng</option></select>
+      <button class="pri" data-perm="bom_up" hidden onclick="bomUpload()">⬆ Upload BOM Excel</button>
+      <button data-perm="bom_up" hidden onclick="bomSuaSP()">+ Thêm sản phẩm</button>
+      <button onclick="bomTai()">⟳ Tải lại</button>
+    </section>
+    <section class="card"><div class="scroll" id="dsBOM"><div class="empty">Đang tải…</div></div></section>
+    <p class="note">Dữ liệu lưu ở các sheet <code>San_Pham</code>, <code>BOM_Phien_Ban</code>, <code>BOM_Chi_Tiet</code>. Mỗi lần upload hoặc sửa BOM tạo trạng thái <b>Chờ duyệt</b>; chỉ BOM <b>hiện hành</b> (đã duyệt) mới dùng tạo lệnh sản xuất.
+      BOM đã nằm trong lệnh sản xuất thì khi sửa sẽ được sao chép thành phiên bản cao hơn.</p>
+  </div>
+
+  <!-- TAB: TẠO LỆNH SX TỪ BOM -->
+  <div class="tab" id="tabLX">
+    <section class="filters">
+      <span class="grp" id="lxLoc">
+        <button data-v="cho" class="on" onclick="lxLoc(this)">Chờ duyệt</button><button data-v="toi" onclick="lxLoc(this)">Của tôi</button><button data-v="all" onclick="lxLoc(this)">Tất cả</button>
+      </span>
+      <button class="pri" data-perm="lsx_tao" hidden onclick="lxTao()">+ Tạo lệnh sản xuất từ BOM</button>
+      <button onclick="lxTai()">⟳ Tải lại</button>
+    </section>
+    <section class="card"><div class="scroll" id="dsLX"><div class="empty">Đang tải…</div></div></section>
+    <p class="note">Phiếu được gộp theo <b>tên chi tiết + vật liệu + độ dày + quy trình công đoạn</b>; mỗi sản phẩm là một dòng trong phiếu (Nhãn = Mã SP – Tên chi tiết, Tổng SL = SLCT × số bộ).
+      Đề xuất được lưu ở sheet <code>_LSX_De_Xuat</code>; khi phê duyệt mới ghi vào <code>LSX</code>, <code>Phieu_San_Xuat</code>, <code>Chi_Tiet_PSX</code> và <code>LSX_BOM</code>.</p>
+  </div>
+
   <!-- TAB 4: TÀI KHOẢN -->
   <div class="tab" id="tabTK">
     <section class="filters"><button class="pri" onclick="suaTK()">+ Thêm tài khoản</button>
@@ -249,6 +288,8 @@
 <div id="loading">Đang tải dữ liệu…</div>
 
 <script src="/shared/core.js"></script>
+<script src="/xlsx-lite.js"></script>
 <script src="/pc.js"></script>
+<script src="/bom.js"></script>
 </body>
 </html>
