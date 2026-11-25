@@ -163,11 +163,12 @@ function ve() {
   $('kpis').innerHTML = [
     ['Lệnh sản xuất', ds.length], ['Phiếu sản xuất', allPsx.length], ['Chi tiết', ds.reduce((a, l) => a + l.soCT, 0)],
     ['Phiếu hoàn thành', allPsx.filter(p => p.pct >= 1).length], ['Tiến độ chung', Math.round(pctChung * 100) + '%'],
+    ['Bộ SP đồng bộ', fSL(ds.reduce((a, l) => a + l.boDongBo, 0)) + ' <small>/ ' + fSL(ds.reduce((a, l) => a + l.boTong, 0)) + '</small>'],
     ['Lệnh trễ hạn', ds.filter(l => l.tre).length, 'warn']
   ].map(k => '<div class="kpi ' + (k[2] || '') + '"><div class="l">' + k[0] + '</div><div class="v">' + k[1] + '</div></div>').join('');
 
   const tb = $('tbLSX');
-  if (!ds.length) { tb.innerHTML = '<tr><td colspan="11" class="empty">Không có lệnh sản xuất phù hợp.</td></tr>'; return; }
+  if (!ds.length) { tb.innerHTML = '<tr><td colspan="13" class="empty">Không có lệnh sản xuất phù hợp.</td></tr>'; return; }
   const q = norm($('q').value);
   const choXoa = new Set(M.choDuyet.map(r => norm(r.Doi_Tuong)));
   tb.innerHTML = ds.map(l => {
@@ -177,10 +178,40 @@ function ve() {
       '<td>' + esc(l.Ngay_Cap_Lenh) + '</td><td>' + esc(l.nguoi) + '</td><td>' + esc(l.Ngay_Hoan_Thanh) + '</td>' +
       '<td>' + badge(l.Trang_Thai) + (l.tre ? '<span class="badge b-late">Trễ hạn</span>' : '') +
       (choXoa.has(norm(l.So_LSX)) ? '<span class="badge b-hold" style="margin-left:4px">Có YC chờ duyệt</span>' : '') + '</td>' +
+      '<td>' + l.sanPham.length + '</td><td>' + (l.boTong ? '<b>' + fSL(l.boDongBo) + '</b> / ' + fSL(l.boTong) + ' bộ' : '–') + '</td>' +
       '<td>' + l.psx.length + '</td><td>' + l.soCT + '</td><td>' + bar(l.pct) + '</td><td class="act">' + nutLSX(l) + '</td></tr>';
-    if (open) h += '<tr class="sub"><td colspan="11">' + bangPhieu(l) + '</td></tr>';
+    if (open) h += '<tr class="sub"><td colspan="13">' + bangSanPham(l) + bangPhieu(l) + '</td></tr>';
     return h;
   }).join('');
+}
+/** Sản phẩm trong lệnh: số bộ đặt, phiên bản BOM, số bộ đã đồng bộ (đủ mọi chi tiết qua công đoạn cuối). */
+function bangSanPham(l) {
+  if (!l.sanPham.length) return '';
+  return '<h3 style="margin-top:0">Sản phẩm trong lệnh (' + l.sanPham.length + ') · đồng bộ ' + fSL(l.boDongBo) + ' / ' + fSL(l.boTong) + ' bộ</h3>' +
+    '<div class="scroll" style="margin-bottom:12px"><table><thead><tr><th>Mã SP</th><th>Tên sản phẩm</th><th>BOM / biến thể</th><th class="r">Số lượng (bộ)</th>' +
+    '<th class="r">Dòng chi tiết</th><th>Đã đồng bộ</th><th>Chi tiết chậm nhất</th></tr></thead><tbody>' +
+    l.sanPham.map(s => '<tr class="clk" onclick="moSanPhamLenh(\'' + jsq(l.So_LSX) + '\',\'' + jsq(s.maSP) + '\')"><td><b>' + esc(s.maSP) + '</b></td><td>' + esc(s.tenSP) + '</td>' +
+      '<td>' + (s.maBOM ? esc(s.maBOM) + (s.bienThe ? ' <span class="badge b-run">' + esc(s.bienThe) + '</span>' : '') : '<span class="muted">Chưa liên kết</span>') + '</td>' +
+      '<td class="r"><b>' + fSL(s.sl) + '</b></td><td class="r">' + s.dong.length + '</td>' +
+      '<td><div style="display:flex;gap:8px;align-items:center"><b>' + fSL(s.dongBo) + '</b>/' + fSL(s.sl) + ' bộ' + bar(s.pct) + '</div></td>' +
+      '<td class="wrap"><small>' + (s.nhat && s.dongBo < s.sl ? esc(s.nhat.p.Ma_PSX.replace(l.So_LSX + '-', '') + ' · ' + s.nhat.ten) + ' – ' + fSL(s.nhat.xong) + '/' + fSL(s.nhat.tong) +
+        ' (' + esc(s.nhat.cuoi || 'chưa có công đoạn') + ')' : (s.dongBo >= s.sl && s.sl ? '✔ Đủ bộ' : '')) + '</small></td></tr>').join('') +
+    '</tbody></table></div>';
+}
+/** Chi tiết 1 sản phẩm trong lệnh: từng dòng, đã xong ở công đoạn cuối, đủ cho bao nhiêu bộ. */
+function moSanPhamLenh(so, maSP) {
+  const l = M.lsx.find(x => x.So_LSX === so), s = l && l.sanPham.find(x => x.maSP === maSP); if (!s) return;
+  $('drTitle').innerHTML = esc(s.maSP) + (s.tenSP ? ' – ' + esc(s.tenSP) : '') + ' trong lệnh ' + esc(so);
+  $('drSub').textContent = 'Đã đồng bộ ' + fSL(s.dongBo) + '/' + fSL(s.sl) + ' bộ · ' + s.dong.length + ' dòng chi tiết' + (s.maBOM ? ' · BOM ' + s.maBOM + (s.bienThe ? ' (' + s.bienThe + ')' : '') : '');
+  const ds = s.dong.slice().sort((a, b) => a.bo - b.bo || a.p.Ma_PSX.localeCompare(b.p.Ma_PSX));
+  moDrawer('<p class="note">Một bộ sản phẩm được tính là <b>đồng bộ</b> khi mọi chi tiết của nó đã xong ở công đoạn cuối của phiếu (thường là Kho thành phẩm). ' +
+    'Số bộ đồng bộ = chi tiết có số bộ ít nhất.</p><div class="card"><div class="scroll"><table><thead><tr><th>Phiếu</th><th>Mã dòng</th><th>Chi tiết</th><th>Vật liệu</th>' +
+    '<th class="r">SL/bộ</th><th class="r">Tổng SL</th><th>Công đoạn cuối</th><th class="r">Đã xong</th><th class="r">Đủ cho (bộ)</th></tr></thead><tbody>' +
+    ds.map(d => '<tr class="clk" onclick="moPhieu(event,\'' + jsq(d.p.Ma_PSX) + '\')"><td>' + esc(d.p.Ma_PSX) + '</td><td>' + esc(d.ln.Ma_Dong) + '</td><td class="wrap">' + esc(d.ten) + '</td>' +
+      '<td>' + esc(d.p.Vat_Lieu) + '</td><td class="r">' + fSL(d.sl1) + '</td><td class="r">' + fSL(d.tong) + '</td><td>' + esc(d.cuoi || '—') + '</td>' +
+      '<td class="r ' + (d.xong >= d.tong && d.tong ? 'cell-ok' : d.xong ? 'cell-part' : 'cell-zero') + '">' + fSL(d.xong) + '</td>' +
+      '<td class="r"><b' + (d.bo === s.dongBo && s.dongBo < s.sl ? ' style="color:var(--red)"' : '') + '>' + fSL(d.bo) + '</b></td></tr>').join('') +
+    '</tbody></table></div></div>');
 }
 function bangPhieu(l) {
   if (!l.psx.length) return '<div class="muted">Lệnh này chưa có phiếu sản xuất.</div>';

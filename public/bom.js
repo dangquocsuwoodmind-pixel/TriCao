@@ -118,30 +118,34 @@ function bomDem() {
   const n = BD && bomCo('bom_duyet') ? BD.versions.filter(v => v.tt === 'CHO_DUYET' && v.nguoiGui !== BD.me).length : 0;
   const el = $('cntBOM'); el.hidden = !n; el.textContent = n;
 }
-const bomVers = maSP => BD.versions.filter(v => norm(v.maSP) === norm(maSP)).sort((a, b) => a.pb - b.pb);
+const bomVers = (maSP, bt) => BD.versions.filter(v => norm(v.maSP) === norm(maSP) && (bt === undefined || norm(v.bt) === norm(bt))).sort((a, b) => a.pb - b.pb);
+const bomBT = bt => bt ? ' <span class="badge b-run">' + esc(bt) + '</span>' : '';
+/** BOM hiện hành của từng biến thể */
+const bomHienHanh = maSP => { const by = {}; bomVers(maSP).filter(v => v.tt === 'DA_DUYET').forEach(v => { by[norm(v.bt)] = v; }); return Object.values(by); };
 function bomVe() {
   if (!BD) return;
   const q = norm($('bomQ').value), loc = $('bomLoc').value;
   const rows = BD.products.map(p => {
-    const vs = bomVers(p.maSP), cur = vs.filter(v => v.tt === 'DA_DUYET').pop(), last = vs.filter(v => v.tt !== 'DA_HUY').pop();
+    const vs = bomVers(p.maSP), cur = bomHienHanh(p.maSP), last = vs.filter(v => v.tt !== 'DA_HUY').pop();
     const dung = [...new Set(vs.flatMap(v => v.dungTrong))];
     return { p, vs, cur, last, dung, cho: vs.some(v => v.tt === 'CHO_DUYET') };
   }).filter(x => (!q || norm(x.p.maSP + ' ' + x.p.tenSP + ' ' + x.p.quyCach).includes(q)) &&
-    (!loc || (loc === 'cho' && x.cho) || (loc === 'chua' && !x.cur) || (loc === 'ngung' && /NGỪNG/i.test(x.p.trangThai))));
+    (!loc || (loc === 'cho' && x.cho) || (loc === 'chua' && !x.cur.length) || (loc === 'ngung' && /NGỪNG/i.test(x.p.trangThai))));
   const el = $('dsBOM');
   if (!rows.length) { el.innerHTML = '<div class="empty">' + (BD.products.length ? 'Không có sản phẩm phù hợp.' : 'Chưa có sản phẩm. Bấm "Upload BOM Excel" để tạo sản phẩm đầu tiên.') + '</div>'; return; }
   el.innerHTML = '<table><thead><tr><th>Mã SP</th><th>Tên sản phẩm</th><th>Quy cách</th><th>BOM hiện hành</th><th>Phiên bản mới nhất</th><th>Số PB</th><th>Đang dùng trong lệnh</th><th>Trạng thái</th></tr></thead><tbody>' +
     rows.map(x => '<tr class="clk" onclick="bomMoSP(\'' + jsq(x.p.maSP) + '\')"><td><b>' + esc(x.p.maSP) + '</b></td><td class="wrap">' + esc(x.p.tenSP) + '</td><td>' + esc(x.p.quyCach) + '</td>' +
-      '<td>' + (x.cur ? esc(x.cur.ma) : '<span class="muted">Chưa có</span>') + '</td>' +
-      '<td>' + (x.last ? esc(x.last.ma) + ' ' + bomBadge(x.last.tt) : '—') + '</td><td>' + x.vs.length + '</td>' +
+      '<td class="wrap">' + (x.cur.length ? x.cur.map(v => esc(v.ma) + bomBT(v.bt)).join('<br>') : '<span class="muted">Chưa có</span>') + '</td>' +
+      '<td>' + (x.last ? esc(x.last.ma) + bomBT(x.last.bt) + ' ' + bomBadge(x.last.tt) : '—') + '</td><td>' + x.vs.length + '</td>' +
       '<td class="wrap">' + (x.dung.length ? esc(x.dung.slice(0, 4).join(', ')) + (x.dung.length > 4 ? '…' : '') : '<span class="muted">—</span>') + '</td>' +
       '<td>' + badge(x.p.trangThai) + '</td></tr>').join('') + '</tbody></table>';
 }
 
 function bomNutPB(v) {
   const h = ['<button class="sm" onclick="bomXemPB(\'' + jsq(v.ma) + '\')">Xem</button>'];
-  const vs = bomVers(v.maSP), last = vs.filter(x => x.tt !== 'DA_HUY').pop();
-  if (last && last.ma === v.ma && bomCo('bom_sua')) h.push('<button class="sm" onclick="bomSua(\'' + jsq(v.ma) + '\')">✎ Sửa</button>');
+  const vs = bomVers(v.maSP, v.bt), last = vs.filter(x => x.tt !== 'DA_HUY').pop();
+  if (bomCo('bom_sua') && v.tt !== 'DA_HUY')
+    h.push('<button class="sm" onclick="bomSua(\'' + jsq(v.ma) + '\')">' + (last && last.ma === v.ma ? '✎ Sửa' : '⧉ Sao chép biến thể') + '</button>');
   if (v.tt === 'CHO_DUYET' && bomCo('bom_duyet') && v.nguoiGui !== BD.me)
     h.push('<button class="sm ok" onclick="bomDuyet(\'' + jsq(v.ma) + '\')">✔ Duyệt</button><button class="sm" onclick="bomTuChoi(\'' + jsq(v.ma) + '\')">✖ Từ chối</button>');
   if (['CHO_DUYET', 'TU_CHOI'].includes(v.tt) && (v.nguoiGui === BD.me || U.role === 'admin') && !v.dungTrong.length)
@@ -158,15 +162,16 @@ function bomMoSP(maSP) {
     (bomCo('bom_up') ? '<button class="pri" onclick="dongPhieu();bomUpload(\'' + jsq(p.maSP) + '\')">⬆ Upload phiên bản BOM mới</button>' : '') + '</div>' +
     '<div class="meta"><div><b>Mã SP</b>' + esc(p.maSP) + '</div><div><b>Tên</b>' + esc(p.tenSP) + '</div><div><b>Quy cách</b>' + esc(p.quyCach || '—') + '</div>' +
     '<div><b>Người tạo</b>' + esc(tenNg(p.nguoiTao)) + '<br><small class="muted">' + esc(p.ngayTao) + '</small></div><div><b>Ghi chú</b>' + esc(p.ghiChu || '—') + '</div></div>' +
-    '<h3>Các phiên bản BOM (' + vs.length + ')</h3><div class="card"><div class="scroll"><table><thead><tr><th>Phiên bản</th><th>Trạng thái</th><th>Nguồn</th><th>Số CT</th>' +
+    '<h3>Các phiên bản BOM (' + vs.length + ')</h3><div class="card"><div class="scroll"><table><thead><tr><th>Phiên bản</th><th>Biến thể</th><th>Trạng thái</th><th>Nguồn</th><th>Số CT</th>' +
     '<th>Người gửi</th><th>Người duyệt</th><th>Ghi chú duyệt</th><th>Dùng trong lệnh</th><th></th></tr></thead><tbody>' +
-    (vs.length ? vs.map(v => '<tr><td><b>' + esc(v.ma) + '</b></td><td>' + bomBadge(v.tt) + '</td><td class="wrap">' + esc(v.nguon) + (v.ghiChu ? '<br><small class="muted">' + esc(v.ghiChu) + '</small>' : '') + '</td>' +
+    (vs.length ? vs.map(v => '<tr><td><b>' + esc(v.ma) + '</b></td><td>' + (v.bt ? bomBT(v.bt) : '<span class="muted">mặc định</span>') + '</td><td>' + bomBadge(v.tt) + '</td><td class="wrap">' + esc(v.nguon) + (v.ghiChu ? '<br><small class="muted">' + esc(v.ghiChu) + '</small>' : '') + '</td>' +
       '<td>' + v.soCT + '</td><td>' + esc(tenNg(v.nguoiGui)) + '<br><small class="muted">' + esc(v.tgGui) + '</small></td>' +
       '<td>' + esc(tenNg(v.nguoiDuyet)) + (v.tgDuyet ? '<br><small class="muted">' + esc(v.tgDuyet) + '</small>' : '') + '</td>' +
       '<td class="wrap">' + esc(v.ghiChuDuyet) + '</td><td class="wrap">' + (v.dungTrong.length ? '🔒 ' + esc(v.dungTrong.join(', ')) : '<span class="muted">—</span>') + '</td>' +
-      '<td class="act">' + bomNutPB(v) + '</td></tr>').join('') : '<tr><td colspan="9" class="empty">Chưa có phiên bản BOM.</td></tr>') +
+      '<td class="act">' + bomNutPB(v) + '</td></tr>').join('') : '<tr><td colspan="10" class="empty">Chưa có phiên bản BOM.</td></tr>') +
     '</tbody></table></div></div>' +
-    '<p class="note">🔒 Phiên bản đã nằm trong lệnh sản xuất (kể cả lệnh đang chờ duyệt) không bị sửa trực tiếp: khi sửa, hệ thống tự sao chép thành phiên bản cao hơn. Mọi lần upload/sửa đều phải được một tài khoản khác duyệt.</p>';
+    '<p class="note">🔒 Phiên bản đã nằm trong lệnh sản xuất (kể cả lệnh đang chờ duyệt) không bị sửa trực tiếp: khi sửa, hệ thống tự sao chép thành phiên bản cao hơn. Mọi lần upload/sửa đều phải được một tài khoản khác duyệt.<br>' +
+    'Biến thể (vd. màu 6626 / 6628) là các BOM hiện hành song song của cùng sản phẩm; duyệt bản mới chỉ thay thế bản cũ cùng biến thể. Muốn tạo màu mới: bấm Sửa/Sao chép và đổi tên biến thể.</p>';
   moDrawer(h);
 }
 
@@ -184,7 +189,7 @@ async function bomXemPB(ma) {
   try {
     loading(true, 'Đang tải BOM…');
     const r = await api('/api/bom?a=lines&ma=' + encodeURIComponent(ma)), v = r.version;
-    $('drTitle').innerHTML = 'BOM ' + esc(v.ma) + ' ' + bomBadge(v.tt);
+    $('drTitle').innerHTML = 'BOM ' + esc(v.ma) + bomBT(v.bt) + ' ' + bomBadge(v.tt);
     $('drSub').textContent = 'Sản phẩm ' + v.maSP + ' · ' + v.soCT + ' chi tiết · ' + v.nguon;
     moDrawer('<div style="display:flex;gap:8px;justify-content:flex-end"><button onclick="bomMoSP(\'' + jsq(v.maSP) + '\')">← Về sản phẩm</button>' + bomNutPB(v) + '</div>' +
       '<div class="meta"><div><b>Người gửi</b>' + esc(tenNg(v.nguoiGui)) + '<br><small class="muted">' + esc(v.tgGui) + '</small></div>' +
@@ -202,6 +207,7 @@ function bomUpload(maSPsan) {
     '<div class="form"><label class="full">File BOM Excel<input type="file" id="bomFile" accept=".xlsx,.xlsm"></label>' +
     '<label>Mã sản phẩm<input id="bomMaSP" value="' + esc(maSPsan || '') + '" placeholder="vd. V0454"></label>' +
     '<label>Tên sản phẩm<input id="bomTenSP"></label><label>Quy cách<input id="bomQC"></label>' +
+    '<label>Biến thể (màu…, để trống nếu không có)<input id="bomBT" list="dlBT" placeholder="vd. 6626"></label><datalist id="dlBT"></datalist>' +
     '<label class="full">Ghi chú phiên bản<input id="bomGC" placeholder="vd. Bản gốc từ phòng kỹ thuật / sửa kích thước hộc kéo…"></label></div>' +
     '<div id="bomKQ" style="margin-top:12px"></div>';
   const kiemTra = async m => {
@@ -210,11 +216,16 @@ function bomUpload(maSPsan) {
     const maSP = m.querySelector('#bomMaSP').value.trim();
     if (!maSP) { out.innerHTML = '<div class="warnbox">Nhập mã sản phẩm.</div>'; kq = null; return; }
     out.innerHTML = '<div class="muted">Đang kiểm tra…</div>';
-    kq = await api('/api/bom', { body: { a: 'upload', dryRun: true, maSP, tenSP: m.querySelector('#bomTenSP').value, lines: doc.lines } });
+    kq = await api('/api/bom', { body: { a: 'upload', dryRun: true, maSP, tenSP: m.querySelector('#bomTenSP').value, bienThe: m.querySelector('#bomBT').value, lines: doc.lines } });
     if (kq.product && !m.querySelector('#bomTenSP').value) { m.querySelector('#bomTenSP').value = kq.product.tenSP; m.querySelector('#bomQC').value = kq.product.quyCach; }
+    m.querySelector('#dlBT').innerHTML = (kq.variants || []).filter(Boolean).map(b => '<option value="' + esc(b) + '">').join('');
     const nCT = kq.lines.filter(l => l.loai === 'CT').length;
+    const daCoBT = (kq.variants || []).some(b => norm(b) === norm(kq.bt));
     out.innerHTML = '<div class="' + (kq.errors.length ? 'warnbox' : 'infobox') + '">' + (kq.isNew ? '<b>Sản phẩm mới</b> ' + esc(maSP.toUpperCase()) : 'Sản phẩm đã có – tạo <b>phiên bản mới</b>') +
-      ' → mã BOM <b>' + esc(kq.ma) + '</b>. ' + kq.lines.length + ' dòng (' + nCT + ' chi tiết). File: ' + esc(file.name) + ' / sheet ' + esc(doc.sheet) + '</div>' +
+      ' → mã BOM <b>' + esc(kq.ma) + '</b>' + (kq.bt ? ', biến thể <b>' + esc(kq.bt) + '</b>' : '') +
+      (kq.isNew ? '' : daCoBT ? ' (thay thế bản hiện hành cùng biến thể khi được duyệt)' : ' (<b>biến thể mới</b> – các biến thể khác vẫn hiện hành)') + '. ' +
+      (kq.variants && kq.variants.length ? 'Biến thể đang có: ' + esc(kq.variants.map(b => b || '(mặc định)').join(', ')) + '. ' : '') +
+      kq.lines.length + ' dòng (' + nCT + ' chi tiết). File: ' + esc(file.name) + ' / sheet ' + esc(doc.sheet) + '</div>' +
       bomList(kq.errors, 'warnbox', 'Lỗi cần sửa trong file:') + bomList(doc.canhBao.concat(kq.warnings), 'infobox', 'Lưu ý:') + bomBangDong(kq.lines);
   };
   modal({
@@ -233,12 +244,12 @@ function bomUpload(maSPsan) {
           await kiemTra(m);
         } catch (x) { doc = null; out.innerHTML = ''; err.textContent = x.message; }
       });
-      ['#bomMaSP', '#bomTenSP'].forEach(s => m.querySelector(s).addEventListener('change', () => kiemTra(m).catch(x => { m.querySelector('.err').textContent = x.message; })));
+      ['#bomMaSP', '#bomTenSP', '#bomBT'].forEach(s => m.querySelector(s).addEventListener('change', () => kiemTra(m).catch(x => { m.querySelector('.err').textContent = x.message; })));
     },
     buttons: [{ t: 'Gửi duyệt', cls: 'pri', fn: async m => {
       if (!doc) throw new Error('Chưa chọn file BOM');
       const g = s => m.querySelector(s).value;
-      const r = await api('/api/bom', { body: { a: 'upload', maSP: g('#bomMaSP'), tenSP: g('#bomTenSP'), quyCach: g('#bomQC'), ghiChu: g('#bomGC'), nguon: 'Upload ' + file.name, lines: doc.lines } });
+      const r = await api('/api/bom', { body: { a: 'upload', maSP: g('#bomMaSP'), tenSP: g('#bomTenSP'), quyCach: g('#bomQC'), bienThe: g('#bomBT'), ghiChu: g('#bomGC'), nguon: 'Upload ' + file.name, lines: doc.lines } });
       toast('Đã upload ' + r.ma + ' – chờ người duyệt BOM xác nhận');
       await bomTai();
     } }]
@@ -280,24 +291,25 @@ async function bomSua(ma) {
     BD.steps.map(s => '<span class="step">' + esc(s) + '</span>').join(' ') + '</p>' +
     '<div class="scroll" style="max-height:55vh"><table id="bomEdit" class="bomed"><thead><tr><th>Loại</th><th>Mã cụm</th><th>Mã PK</th><th>Tên chi tiết</th><th>Dài</th><th>Rộng</th><th>Dày</th><th>SLCT</th><th>Vật liệu</th><th>Quy trình công đoạn</th><th>Ghi chú công đoạn</th><th></th></tr></thead><tbody>' +
     r.lines.map(bomDongSua).join('') + '</tbody></table></div>' +
-    '<div class="form" style="margin-top:10px"><label class="full">Ghi chú phiên bản / lý do sửa<input id="bomGC" value="' + esc(v.ghiChu) + '"></label></div><div id="bomKQ"></div>';
+    '<div class="form" style="margin-top:10px"><label>Biến thể (đổi tên = sao chép sang biến thể mới)<input id="bomBT" value="' + esc(v.bt) + '"></label>' +
+    '<label class="full" style="grid-column:span 2">Ghi chú phiên bản / lý do sửa<input id="bomGC" value="' + esc(v.ghiChu) + '"></label></div><div id="bomKQ"></div>';
   modal({
-    title: 'Sửa BOM ' + esc(v.ma), wide: true, body,
+    title: 'Sửa BOM ' + esc(v.ma) + bomBT(v.bt), wide: true, body,
     buttons: [
       { t: '+ Thêm dòng', fn: m => { m.querySelector('#bomEdit tbody').insertAdjacentHTML('beforeend', bomDongSua()); return false; } },
       { t: 'Kiểm tra', fn: async m => {
-        const k = await api('/api/bom', { body: { a: 'edit', dryRun: true, ma: v.ma, lines: bomThuDong(m), ghiChu: m.querySelector('#bomGC').value } });
+        const k = await api('/api/bom', { body: { a: 'edit', dryRun: true, ma: v.ma, lines: bomThuDong(m), ghiChu: m.querySelector('#bomGC').value, bienThe: m.querySelector('#bomBT').value } });
         m.querySelector('#bomKQ').innerHTML = (k.errors.length ? bomList(k.errors, 'warnbox', 'Lỗi:') : '<div class="infobox">Hợp lệ. Khi lưu: ' +
           (k.mode === 'new' ? 'tạo phiên bản mới <b>' + esc(k.newMa) + '</b>' : 'cập nhật <b>' + esc(k.newMa) + '</b>') + ' – chờ duyệt.</div>') + bomList(k.warnings, 'infobox', 'Lưu ý:');
         return false;
       } },
       { t: 'Lưu & gửi duyệt', cls: 'pri', fn: async m => {
-        const lines = bomThuDong(m), ghiChu = m.querySelector('#bomGC').value;
-        const k = await api('/api/bom', { body: { a: 'edit', dryRun: true, ma: v.ma, lines, ghiChu } });
+        const lines = bomThuDong(m), ghiChu = m.querySelector('#bomGC').value, bienThe = m.querySelector('#bomBT').value;
+        const k = await api('/api/bom', { body: { a: 'edit', dryRun: true, ma: v.ma, lines, ghiChu, bienThe } });
         if (k.errors.length) { m.querySelector('#bomKQ').innerHTML = bomList(k.errors, 'warnbox', 'Lỗi:'); throw new Error('BOM còn ' + k.errors.length + ' lỗi – xem danh sách bên trên'); }
         if (k.mode === 'new' && !(await bomXacNhan('Tạo phiên bản BOM mới',
-          '<p>' + esc(v.ma) + ' đang dùng trong lệnh <b>' + esc(k.usedIn.join(', ')) + '</b>.</p><p>Thay đổi sẽ được lưu thành phiên bản mới <b>' + esc(k.newMa) + '</b> (chờ duyệt). Tiếp tục?</p>', 'Tạo ' + k.newMa))) return false;
-        const s = await api('/api/bom', { body: { a: 'edit', ma: v.ma, lines, ghiChu } });
+          '<p>' + esc(v.ma) + ': <b>' + esc(k.usedIn.join(', ')) + '</b>.</p><p>Thay đổi sẽ được lưu thành phiên bản mới <b>' + esc(k.newMa) + '</b> (chờ duyệt). Tiếp tục?</p>', 'Tạo ' + k.newMa))) return false;
+        const s = await api('/api/bom', { body: { a: 'edit', ma: v.ma, lines, ghiChu, bienThe } });
         toast((s.mode === 'new' ? 'Đã tạo phiên bản mới ' : 'Đã cập nhật ') + s.ma + ' – chờ duyệt');
         await bomTai(); bomMoSP(v.maSP);
       } }
@@ -310,11 +322,11 @@ async function bomDuyet(ma) {
   let r;
   try { loading(true, 'Đang tải BOM…'); r = await api('/api/bom?a=lines&ma=' + encodeURIComponent(ma)); }
   catch (e) { loi(e); return; } finally { loading(false); }
-  const v = r.version, vs = bomVers(v.maSP), cur = vs.filter(x => x.tt === 'DA_DUYET').pop();
+  const v = r.version, cur = bomVers(v.maSP, v.bt).filter(x => x.tt === 'DA_DUYET').pop();
   modal({
-    title: 'Duyệt BOM ' + esc(v.ma), wide: true,
+    title: 'Duyệt BOM ' + esc(v.ma) + bomBT(v.bt), wide: true,
     body: '<p>Gửi bởi <b>' + esc(tenNg(v.nguoiGui)) + '</b> lúc ' + esc(v.tgGui) + ' · ' + esc(v.nguon) + (v.ghiChu ? ' · <i>' + esc(v.ghiChu) + '</i>' : '') + '</p>' +
-      (cur ? '<div class="infobox">Sau khi duyệt, <b>' + esc(v.ma) + '</b> thành BOM hiện hành; <b>' + esc(cur.ma) + '</b> chuyển sang "Đã thay thế" (các lệnh đã tạo không đổi).</div>' : '') +
+      (cur ? '<div class="infobox">Sau khi duyệt, <b>' + esc(v.ma) + '</b> thành BOM hiện hành' + (v.bt ? ' của biến thể ' + esc(v.bt) : '') + '; <b>' + esc(cur.ma) + '</b> chuyển sang "Đã thay thế" (các lệnh đã tạo không đổi).</div>' : '') +
       bomBangDong(r.lines) + '<div class="form" style="margin-top:10px"><label class="full">Ghi chú duyệt (không bắt buộc)<input id="gcBom"></label></div>',
     buttons: [{ t: '✔ Duyệt BOM', cls: 'ok', fn: async m => {
       await api('/api/bom', { body: { a: 'approve', ma: v.ma, hash: v.hash, note: m.querySelector('#gcBom').value } });
@@ -348,6 +360,38 @@ function bomSuaSP(maSP) {
       await api('/api/bom', { body: { a: 'product', maSP: g('#spMa'), tenSP: g('#spTen'), quyCach: g('#spQC'), trangThai: g('#spTT'), ghiChu: g('#spGC') } });
       toast('Đã lưu sản phẩm'); await bomTai(); if (p) bomMoSP(p.maSP);
     } }]
+  });
+}
+
+/* ---------- Tổng hợp ngược từ các lệnh đã có (quản trị) ---------- */
+function bomVeTongHop(r) {
+  const moi = r.versions.filter(v => v.tt === 'DA_DUYET').length;
+  return '<section class="kpis"><div class="kpi"><div class="l">Sản phẩm mới</div><div class="v">' + r.products.length + '</div></div>' +
+    '<div class="kpi"><div class="l">Phiên bản BOM</div><div class="v">' + r.versions.length + ' <small>(' + moi + ' hiện hành)</small></div></div>' +
+    '<div class="kpi"><div class="l">Dòng BOM</div><div class="v">' + fSL(r.totalLines) + '</div></div>' +
+    '<div class="kpi"><div class="l">Liên kết lệnh–SP</div><div class="v">' + r.links.length + '</div></div></section>' +
+    bomList(r.skipped.map(s => s.soLSX + ': ' + s.lyDo), 'infobox', 'Bỏ qua:') + bomList(r.warnings, 'warnbox', 'Lưu ý dữ liệu:') +
+    '<h3>Phiên bản sẽ tạo</h3><div class="scroll"><table><thead><tr><th>Mã BOM</th><th>Biến thể</th><th>Trạng thái</th><th class="r">Số CT</th><th>Lấy từ lệnh</th></tr></thead><tbody>' +
+    r.versions.map(v => '<tr><td><b>' + esc(v.ma) + '</b></td><td>' + (v.bt ? bomBT(v.bt) : '<span class="muted">mặc định</span>') + '</td><td>' + bomBadge(v.tt) + '</td><td class="r">' + v.soCT +
+      (v.thieuKT ? ' <span class="badge b-late">' + v.thieuKT + ' thiếu KT</span>' : '') + '</td><td>' + esc(v.lsx.join(', ')) + '</td></tr>').join('') + '</tbody></table></div>' +
+    '<h3>Liên kết lệnh – sản phẩm</h3><div class="scroll"><table><thead><tr><th>Lệnh</th><th>Mã SP</th><th>BOM</th><th class="r">Số bộ</th></tr></thead><tbody>' +
+    r.links.map(l => '<tr><td>' + esc(l.soLSX) + '</td><td>' + esc(l.maSP) + '</td><td>' + esc(l.ma) + bomBT(l.bt) + '</td><td class="r">' + fSL(l.sl) + '</td></tr>').join('') + '</tbody></table></div>';
+}
+async function bomTongHop() {
+  let r;
+  try { loading(true, 'Đang đọc toàn bộ lệnh, phiếu, chi tiết…'); r = await api('/api/bom', { body: { a: 'import', dryRun: true } }); }
+  catch (e) { loi(e); return; } finally { loading(false); }
+  modal({
+    title: 'Tổng hợp sản phẩm & BOM từ lệnh sản xuất đã có', wide: true,
+    body: '<div class="infobox">Suy ngược từ sheet LSX / Phieu_San_Xuat / Chi_Tiet_PSX: sản phẩm = phần trước " - " của Nhãn; số bộ = Tổng SL ÷ SL/bộ; ' +
+      'vật liệu, độ dày, quy trình lấy từ phiếu; biến thể màu lấy từ tên lệnh (vd. "MLM6626"). Cùng sản phẩm + biến thể + nội dung → dùng chung 1 phiên bản; ' +
+      'bản dùng ở lệnh gần nhất là hiện hành. Lệnh huỷ và lệnh đã có liên kết được bỏ qua – chạy lại nhiều lần không bị trùng. Dữ liệu lệnh gốc không bị thay đổi.</div>' +
+      (r.links.length ? bomVeTongHop(r) : '<div class="empty">Không có lệnh nào cần tổng hợp.</div>'),
+    buttons: r.links.length ? [{ t: 'Ghi vào Google Sheet', cls: 'pri', fn: async () => {
+      const x = await api('/api/bom', { body: { a: 'import' } });
+      toast('Đã tạo ' + x.products.length + ' sản phẩm, ' + x.versions.length + ' phiên bản BOM, ' + x.links.length + ' liên kết lệnh');
+      await bomTai(); lxTai(true); taiDuLieu(true);
+    } }] : []
   });
 }
 
@@ -389,7 +433,7 @@ function lxVePlan(p) {
     '<div class="meta"><div><b>Số LSX</b>' + esc(h.soLSX) + '</div><div><b>Tên lệnh</b>' + esc(h.tenLSX) + '</div><div><b>Ngày cấp</b>' + esc(h.ngayCap) + '</div>' +
     '<div><b>Người cấp</b>' + esc(h.nguoiCap) + '</div><div><b>Hạn hoàn thành</b>' + esc(h.hanHT) + '</div></div>' +
     '<div class="card"><div class="scroll"><table><thead><tr><th>Mã SP</th><th>Tên sản phẩm</th><th>Phiên bản BOM</th><th class="r">Số bộ</th></tr></thead><tbody>' +
-    p.items.map(i => '<tr><td><b>' + esc(i.maSP) + '</b></td><td>' + esc(i.tenSP) + '</td><td>' + esc(i.ma) + '</td><td class="r">' + fSL(i.sl) + '</td></tr>').join('') + '</tbody></table></div></div>' +
+    p.items.map(i => '<tr><td><b>' + esc(i.maSP) + '</b></td><td>' + esc(i.tenSP) + '</td><td>' + esc(i.ma) + bomBT(i.bt) + '</td><td class="r">' + fSL(i.sl) + '</td></tr>').join('') + '</tbody></table></div></div>' +
     '<h3>Phiếu sản xuất sẽ tạo (' + p.psx.length + ') – gộp chi tiết cùng tên, vật liệu, độ dày và quy trình</h3>' +
     p.psx.map((x, i) => '<details class="pf"' + (i < 3 ? ' open' : '') + '><summary><b>' + esc(x.ma) + '</b> · ' + esc(x.ten) + ' · ' + esc(x.vatLieu) + ' · ' + x.lines.length + ' dòng · ' +
       fSL(x.lines.reduce((a, l) => a + l.tong, 0)) + ' chi tiết</summary><div class="in">' + bomChips(x.buoc) +
@@ -402,7 +446,7 @@ const lxIso = d => { const m = String(d || '').match(/^(\d{2})\/(\d{2})\/(\d{4})
 const lxDmy = s => { const m = String(s || '').match(/^(\d{4})-(\d{2})-(\d{2})$/); return m ? m[3] + '/' + m[2] + '/' + m[1] : ''; };
 function lxDongSP() {
   return '<tr><td><select data-k="ma" style="min-width:380px"><option value="">— Chọn sản phẩm (BOM hiện hành) —</option>' +
-    LXD.choices.map(c => '<option value="' + esc(c.ma) + '">' + esc(c.maSP + ' – ' + c.tenSP + ' (' + c.ma + ', ' + c.soCT + ' CT)') + '</option>').join('') + '</select></td>' +
+    LXD.choices.map(c => '<option value="' + esc(c.ma) + '">' + esc(c.maSP + ' – ' + c.tenSP + (c.bt ? ' · màu ' + c.bt : '') + ' (' + c.ma + ', ' + c.soCT + ' CT)') + '</option>').join('') + '</select></td>' +
     '<td><input data-k="sl" type="number" min="1" step="1" style="width:110px" placeholder="Số bộ"></td>' +
     '<td><button class="sm" onclick="this.closest(\'tr\').remove()">✕</button></td></tr>';
 }

@@ -75,6 +75,24 @@ Người upload/sửa BOM và người tạo lệnh **không được tự duy�
 3. **Xác nhận & gửi duyệt** → lưu ở `_LSX_De_Xuat`. Người có quyền `lsx_duyet` (khác người tạo) xem lại bản tính lại từ BOM và **phê duyệt** →
    ghi `LSX`, `Phieu_San_Xuat`, `Chi_Tiet_PSX`, `LSX_BOM` trong **một lần ghi nguyên tử**. Nếu BOM bị đổi sau khi đề xuất (so dấu vân tay nội dung) thì không cho duyệt.
 
+### Biến thể (màu)
+
+Cùng 1 mã sản phẩm có thể có nhiều **biến thể** (cột `Bien_The`, vd. 6626 / 6628 / S3003-1), mỗi biến thể có BOM hiện hành riêng, **song song**.
+Duyệt bản mới chỉ thay thế bản cũ cùng biến thể. Tạo màu mới: Sửa/Sao chép một phiên bản và đổi tên biến thể (vẫn phải duyệt). Khi tạo lệnh chọn sản phẩm theo biến thể.
+
+### Sản phẩm & đồng bộ trong lệnh
+
+Mở 1 lệnh ở tab *Tình trạng lệnh sản xuất*: hiện **Sản phẩm trong lệnh** (mã, tên, BOM/biến thể, số bộ, số bộ đã đồng bộ, chi tiết chậm nhất) rồi mới tới danh sách phiếu.
+Bấm vào 1 sản phẩm để xem từng chi tiết đủ cho bao nhiêu bộ.
+- Sản phẩm của 1 dòng chi tiết = phần trước `" - "` trong Nhãn; số bộ lấy từ `LSX_BOM` (nếu chưa liên kết thì = Tổng SL ÷ SL/bộ).
+- **Bộ đồng bộ** = min trên các chi tiết của sản phẩm: ⌊ số đã xong ở **công đoạn cuối** của phiếu ÷ SL/bộ ⌋.
+
+### Tổng hợp từ lệnh cũ (quản trị, chạy 1 lần sau khi deploy)
+
+Tab *Sản phẩm & BOM* → **⇪ Tổng hợp từ lệnh cũ**: suy ngược sản phẩm, phiên bản BOM, biến thể (từ tên lệnh `MLM6626`…) và liên kết `LSX_BOM` từ các lệnh đã có;
+xem trước rồi mới ghi (1 lần ghi nguyên tử). Bỏ qua lệnh Huỷ và lệnh đã liên kết – chạy lại không trùng. Không sửa dữ liệu lệnh gốc.
+Các BOM tạo ra được đánh dấu đã duyệt bởi quản trị chạy tổng hợp. Dòng thiếu Dài/Rộng/Dày được giữ nguyên và báo trong phần lưu ý.
+
 | Sheet mới | Nội dung |
 |---|---|
 | `San_Pham` | Mã, tên, quy cách, trạng thái sản phẩm |

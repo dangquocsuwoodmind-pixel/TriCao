@@ -4,7 +4,8 @@ import { batchGet, q } from './_lib/google.js';
 import { S, requireUser, publicUser, ensureSheets } from './_lib/store.js';
 import { FIELDS } from './_lib/lsx.js';
 
-const KEYS = ['lsx', 'psx', 'ct', 'gsl', 'cd', 'nd', 'yc'];
+// lb/sp/pb: liên kết lệnh ↔ sản phẩm ↔ phiên bản BOM (hiển thị sản phẩm & đồng bộ trong lệnh)
+const KEYS = ['lsx', 'psx', 'ct', 'gsl', 'cd', 'nd', 'yc', 'lb', 'sp', 'pb'];
 let cache = { at: 0, v: null };
 
 export default handler(async (req) => {

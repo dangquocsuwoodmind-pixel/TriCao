@@ -197,7 +197,7 @@
     <section class="card"><div class="scroll"><table>
       <thead><tr>
         <th></th><th>Số LSX</th><th>Tên lệnh</th><th>Ngày cấp</th><th>Người cấp</th>
-        <th>Hạn hoàn thành</th><th>Trạng thái</th><th>Phiếu</th><th>Chi tiết</th><th>Tiến độ</th><th></th>
+        <th>Hạn hoàn thành</th><th>Trạng thái</th><th>Sản phẩm</th><th>Đồng bộ</th><th>Phiếu</th><th>Chi tiết</th><th>Tiến độ</th><th></th>
       </tr></thead>
       <tbody id="tbLSX"></tbody>
     </table></div></section>
@@ -244,6 +244,7 @@
       <select id="bomLoc" onchange="bomVe()"><option value="">Tất cả sản phẩm</option><option value="cho">Có BOM chờ duyệt</option><option value="chua">Chưa có BOM hiện hành</option><option value="ngung">Đã ngừng</option></select>
       <button class="pri" data-perm="bom_up" hidden onclick="bomUpload()">⬆ Upload BOM Excel</button>
       <button data-perm="bom_up" hidden onclick="bomSuaSP()">+ Thêm sản phẩm</button>
+      <button data-role="admin" hidden onclick="bomTongHop()" title="Suy ngược sản phẩm, BOM và liên kết từ các lệnh sản xuất đã có">⇪ Tổng hợp từ lệnh cũ</button>
       <button onclick="bomTai()">⟳ Tải lại</button>
     </section>
     <section class="card"><div class="scroll" id="dsBOM"><div class="empty">Đang tải…</div></div></section>

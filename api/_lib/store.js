@@ -19,7 +19,7 @@ export const HELPER = {
   // ---- Sản phẩm / BOM / Lệnh SX từ BOM ----
   [S.sp]: { hidden: false, head: ['Ma_SP', 'Ten_SP', 'Quy_Cach', 'Ghi_Chu', 'Trang_Thai', 'Nguoi_Tao', 'Ngay_Tao'] },
   [S.pb]: { hidden: false, head: ['Ma_BOM', 'Ma_SP', 'Phien_Ban', 'Trang_Thai', 'Nguon', 'Tu_Phien_Ban', 'So_Chi_Tiet', 'Ghi_Chu',
-    'Nguoi_Tao', 'TG_Tao', 'Nguoi_Gui', 'TG_Gui', 'Nguoi_Duyet', 'TG_Duyet', 'Ghi_Chu_Duyet', 'Hash'] },
+    'Nguoi_Tao', 'TG_Tao', 'Nguoi_Gui', 'TG_Gui', 'Nguoi_Duyet', 'TG_Duyet', 'Ghi_Chu_Duyet', 'Hash', 'Bien_The'] },
   [S.bct]: { hidden: false, head: ['Ma_BOM', 'STT', 'Loai', 'Ma_Cum', 'Ma_PK', 'Ma_PL', 'Ten_CT', 'Dai', 'Rong', 'Day', 'SLCT', 'Vat_Lieu', 'Quy_Trinh', 'Ghi_Chu_CD'] },
   [S.lb]: { hidden: false, head: ['So_LSX', 'Ma_SP', 'Ma_BOM', 'So_Luong', 'Thoi_Gian', 'De_Xuat_ID'] },
   [S.de]: { hidden: false, head: ['ID', 'So_LSX', 'Ten_LSX', 'Tom_Tat', 'Noi_Dung', 'Nguoi_Tao', 'TG_Tao', 'Trang_Thai', 'Nguoi_Duyet', 'TG_Duyet', 'Ghi_Chu_Duyet'] }

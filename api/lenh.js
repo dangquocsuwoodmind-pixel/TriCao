@@ -22,10 +22,8 @@ export default handler(async (req) => {
   if (req.method === 'GET') {
     const u = await requirePC(req);
     const DB = await loadDB();
-    const choices = DB.products.filter(p => !/NGỪNG/i.test(p.trangThai)).map(p => {
-      const v = DB.currentOf(p.maSP);
-      return v ? { maSP: p.maSP, tenSP: p.tenSP, quyCach: p.quyCach, ma: v.ma, pb: v.pb, soCT: v.soCT } : null;
-    }).filter(Boolean);
+    const choices = DB.products.filter(p => !/NGỪNG/i.test(p.trangThai)).flatMap(p =>
+      DB.currentsOf(p.maSP).map(v => ({ maSP: p.maSP, tenSP: p.tenSP, quyCach: p.quyCach, ma: v.ma, pb: v.pb, bt: v.bt, soCT: v.soCT })));
     return {
       ok: true, me: u.email, today: todayVN(), suggest: suggestSoLSX(DB), choices,
       list: DB.drafts.slice().reverse().slice(0, 300).map(pubDraft)

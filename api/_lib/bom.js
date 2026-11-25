@@ -168,7 +168,7 @@ export async function loadDB() {
     _r: o._r, ma: String(o.Ma_BOM ?? '').trim(), maSP: String(o.Ma_SP ?? '').trim(), pb: Number(o.Phien_Ban) || 0, tt: String(o.Trang_Thai || ''),
     nguon: String(o.Nguon ?? ''), tuPB: String(o.Tu_Phien_Ban ?? ''), soCT: Number(o.So_Chi_Tiet) || 0, ghiChu: String(o.Ghi_Chu ?? ''),
     nguoiTao: o.Nguoi_Tao, tgTao: o.TG_Tao, nguoiGui: o.Nguoi_Gui, tgGui: o.TG_Gui, nguoiDuyet: o.Nguoi_Duyet, tgDuyet: o.TG_Duyet,
-    ghiChuDuyet: String(o.Ghi_Chu_Duyet ?? ''), hash: String(o.Hash ?? '')
+    ghiChuDuyet: String(o.Ghi_Chu_Duyet ?? ''), hash: String(o.Hash ?? ''), bt: String(o.Bien_The ?? '').trim()
   })).filter(v => v.ma);
   const ctRows = toObjects(ct);
   const links = toObjects(lb).map(o => ({ _r: o._r, soLSX: String(o.So_LSX ?? ''), maSP: String(o.Ma_SP ?? ''), ma: String(o.Ma_BOM ?? ''), sl: Number(o.So_Luong) || 0 }));
@@ -189,12 +189,16 @@ export async function loadDB() {
   drafts.filter(d => d.tt === 'CHO_DUYET' || d.tt === 'DANG_XU_LY')
     .forEach(d => (d.noiDung.items || []).forEach(it => add(it.ma, d.soLSX + ' (chờ duyệt)')));
 
-  const versionsOf = maSP => versions.filter(v => norm(v.maSP) === norm(maSP)).sort((a, b) => a.pb - b.pb);
-  /** Phiên bản mới nhất (không tính bản đã huỷ) – chỉ phiên bản này được sửa. */
-  const latestOf = maSP => versionsOf(maSP).filter(v => v.tt !== 'DA_HUY').pop() || null;
-  const currentOf = maSP => versionsOf(maSP).filter(v => v.tt === 'DA_DUYET').pop() || null;
+  const versionsOf = (maSP, bt) => versions.filter(v => norm(v.maSP) === norm(maSP) && (bt === undefined || norm(v.bt) === norm(bt))).sort((a, b) => a.pb - b.pb);
+  /** Phiên bản mới nhất của 1 biến thể (không tính bản đã huỷ) – chỉ phiên bản này được sửa. */
+  const latestOf = (maSP, bt) => versionsOf(maSP, bt).filter(v => v.tt !== 'DA_HUY').pop() || null;
+  /** BOM hiện hành của từng biến thể (các biến thể màu cùng hiện hành song song). */
+  const currentsOf = maSP => {
+    const by = {}; versionsOf(maSP).filter(v => v.tt === 'DA_DUYET').forEach(v => { by[norm(v.bt)] = v; });
+    return Object.values(by).sort((a, b) => a.bt.localeCompare(b.bt));
+  };
 
-  return { products, versions, ctRows, links, drafts, lsxSet, cdNames, idx, vByMa, linesOf, rowsOf, usage, versionsOf, latestOf, currentOf };
+  return { products, versions, ctRows, links, drafts, lsxSet, cdNames, idx, vByMa, linesOf, rowsOf, usage, versionsOf, latestOf, currentsOf };
 }
 
 function parseDraft(o) {
@@ -214,8 +218,10 @@ const H = name => HELPER[name].head;
 const verRow = v => ({
   Ma_BOM: v.ma, Ma_SP: v.maSP, Phien_Ban: v.pb, Trang_Thai: v.tt, Nguon: v.nguon, Tu_Phien_Ban: v.tuPB, So_Chi_Tiet: v.soCT, Ghi_Chu: v.ghiChu,
   Nguoi_Tao: v.nguoiTao, TG_Tao: v.tgTao, Nguoi_Gui: v.nguoiGui, TG_Gui: v.tgGui, Nguoi_Duyet: v.nguoiDuyet || '', TG_Duyet: v.tgDuyet || '',
-  Ghi_Chu_Duyet: v.ghiChuDuyet || '', Hash: v.hash
+  Ghi_Chu_Duyet: v.ghiChuDuyet || '', Hash: v.hash, Bien_The: v.bt || ''
 });
+/** Tên biến thể (màu…): chữ hoa, tối đa 40 ký tự; rỗng = mặc định. */
+export const cleanBT = s => String(s ?? '').replace(/\s+/g, ' ').trim().toUpperCase().slice(0, 40);
 export const maBOM = (maSP, pb) => maSP + '-PB' + String(pb).padStart(2, '0');
 
 /** Tạo phiên bản BOM mới (kèm tạo sản phẩm nếu chưa có) – 1 batchUpdate. */
@@ -306,12 +312,12 @@ export function buildPlan(DB, header, items, mode = 'create', hashes = {}) {
     const p = DB.products.find(x => norm(x.maSP) === norm(v.maSP));
     if (mode === 'create' && v.tt !== 'DA_DUYET') errors.push(`${v.ma}: BOM chưa được duyệt hoặc không còn hiện hành (${TT_BOM[v.tt] || v.tt})`);
     if (mode !== 'create' && !['DA_DUYET', 'THAY_THE'].includes(v.tt)) errors.push(`${v.ma}: BOM không còn ở trạng thái đã duyệt (${TT_BOM[v.tt] || v.tt})`);
-    if (mode !== 'create' && v.tt === 'THAY_THE') warnings.push(`${v.ma}: đã có phiên bản BOM mới hơn được duyệt sau khi đề xuất lệnh`);
+    if (mode !== 'create' && v.tt === 'THAY_THE') warnings.push(`${v.ma}: đã có phiên bản BOM mới hơn (cùng biến thể) được duyệt sau khi đề xuất lệnh`);
     if (p && /NGỪNG/i.test(p.trangThai) && mode === 'create') errors.push(`Sản phẩm ${v.maSP} đang ở trạng thái Ngừng`);
     const lines = DB.linesOf(v.ma);
     const h = hashLines(lines);
     if (hashes[norm(v.ma)] && hashes[norm(v.ma)] !== h) errors.push(`${v.ma}: nội dung BOM đã thay đổi so với lúc đề xuất lệnh`);
-    its.push({ maSP: v.maSP, tenSP: p ? p.tenSP : '', ma: v.ma, pb: v.pb, sl: it.sl, hash: h });
+    its.push({ maSP: v.maSP, tenSP: p ? p.tenSP : '', ma: v.ma, pb: v.pb, bt: v.bt, sl: it.sl, hash: h });
     for (const l of lines) {
       if (l.loai !== 'CT') continue;
       if (!l.buoc.length) { warnings.push(`${v.maSP} – ${l.ten}: không có quy trình công đoạn, bỏ qua`); continue; }
@@ -410,3 +416,108 @@ export async function claimDraft(r, who) {
 }
 
 export const newDraftId = () => 'LX' + nowVN().replace(/\D/g, '').slice(2, 14) + '-' + crypto.randomBytes(2).toString('hex').toUpperCase();
+
+/* ======================= Tổng hợp ngược: lệnh cũ → sản phẩm, BOM, liên kết ======================= */
+/** Biến thể màu lấy từ tên lệnh: "605 MLM6626---PO…" → 6626, "8892 MLM S3003-1---PO…" → S3003-1. */
+export const btFromTenLSX = ten => { const m = String(ten || '').match(/MLM\s*([A-Z]*\d[A-Z0-9]*(?:-\d+)?)/i); return m ? m[1].toUpperCase() : ''; };
+/** "MLM 6626 12mm" → ["MLM 6626", 12] */
+const splitVL = v => {
+  const m = String(v ?? '').match(/^(.*?)\s*(\d+(?:[.,]\d+)?)\s*mm\s*$/i);
+  return m ? [up(m[1], 100), Number(m[2].replace(',', '.'))] : [up(v, 100), null];
+};
+const numN = v => (v === '' || v == null || !Number.isFinite(Number(v)) ? null : Number(v));
+
+/**
+ * Lập kế hoạch tổng hợp: đọc LSX / Phieu_San_Xuat / Chi_Tiet_PSX, mỗi (lệnh, sản phẩm) → 1 bộ dòng BOM.
+ * Sản phẩm = phần trước " - " của Nhãn; số bộ = Tổng SL ÷ SL/bộ; vật liệu + độ dày + quy trình lấy từ phiếu.
+ * Cùng sản phẩm + biến thể + nội dung giống nhau → dùng chung 1 phiên bản. Bỏ qua lệnh Huỷ và lệnh đã có liên kết.
+ */
+export async function planImport(DB, who) {
+  const [L, P, C] = await batchGet([q(S.lsx), q(S.psx), q(S.ct)], 'UNFORMATTED_VALUE');
+  const lsx = toObjects(L), psx = toObjects(P), ct = toObjects(C);
+  const linked = new Set(DB.links.map(l => norm(l.soLSX)));
+  const psxBy = {}; psx.forEach((p, i) => { (psxBy[norm(p.Lenh_SX)] = psxBy[norm(p.Lenh_SX)] || []).push({ ...p, _i: i }); });
+  const ctBy = {}; ct.forEach((c, i) => { (ctBy[norm(c.Ma_PSX)] = ctBy[norm(c.Ma_PSX)] || []).push({ ...c, _i: i }); });
+  const t = nowVN(), warnings = [], skipped = [], links = [];
+  const plannedVers = [];                 // phiên bản mới sẽ tạo
+  const newProducts = new Map();
+  const maxPB = {}; DB.versions.forEach(v => { maxPB[norm(v.maSP)] = Math.max(maxPB[norm(v.maSP)] || 0, v.pb); });
+  let useIdx = 0;
+
+  for (const l of lsx) {
+    const so = String(l.So_LSX ?? '').trim();
+    if (!so) continue;
+    if (boDau(l.Trang_Thai) === 'HUY') { skipped.push({ soLSX: so, lyDo: 'Lệnh đã huỷ' }); continue; }
+    if (linked.has(norm(so))) { skipped.push({ soLSX: so, lyDo: 'Đã có liên kết sản phẩm' }); continue; }
+    const bt = btFromTenLSX(l.Ten_LSX);
+    const groups = new Map();
+    for (const p of psxBy[norm(so)] || []) {
+      const [vatLieu, day] = splitVL(p.Vat_Lieu);
+      const buoc = [];
+      for (let i = 1; i <= MAX_CD; i++) {
+        const s = String(p['CD' + i] ?? '').trim(); if (!s) continue;
+        const c = canonStep(s, DB.idx) || baseName(s);
+        if (!canonStep(s, DB.idx)) warnings.push(`Phiếu ${p.Ma_PSX}: công đoạn "${s}" chưa có trong danh mục`);
+        buoc.push(c);
+      }
+      for (const c of ctBy[norm(p.Ma_PSX)] || []) {
+        const nh = String(c.Nhan ?? ''), k = nh.indexOf(' - ');
+        if (k <= 0) { warnings.push(`${c.Ma_Dong}: nhãn "${nh}" không có dạng "Mã SP - Tên" – bỏ qua`); continue; }
+        const maSP = nh.slice(0, k).trim().toUpperCase(), sl1 = numN(c.So_Luong_1_Bo) || 1, tong = numN(c.Tong_So_Luong) || 0;
+        const g = groups.get(maSP) || { maSP, lines: [], qty: {} };
+        groups.set(maSP, g);
+        const bo = Math.round((tong / sl1) * 1000) / 1000;
+        g.qty[bo] = (g.qty[bo] || 0) + 1;
+        g.lines.push({ ord: p._i * 1e5 + c._i, loai: 'CT', maCum: '', maPK: '', maPL: '', ten: up(nh.slice(k + 3), 200),
+          dai: numN(c.Dai), rong: numN(c.Rong), day, slct: sl1, vatLieu, buoc, ghiChu: {} });
+      }
+    }
+    for (const g of groups.values()) {
+      g.lines.sort((a, b) => a.ord - b.ord);
+      const lines = g.lines.map((x, i) => { const { ord, ...rest } = x; return { ...rest, stt: i + 1 }; });
+      const qs = Object.entries(g.qty).sort((a, b) => b[1] - a[1]);
+      const sl = Number(qs[0][0]);
+      if (qs.length > 1) warnings.push(`${so} / ${g.maSP}: số bộ không đồng nhất giữa các dòng (${qs.map(x => x[0]).join(', ')}) – lấy ${sl}`);
+      const thieu = lines.filter(x => !(x.dai > 0) || !(x.rong > 0) || !(x.day > 0)).length;
+      const h = hashLines(lines);
+      let ver = DB.versionsOf(g.maSP, bt).find(v => v.hash === h && v.tt !== 'DA_HUY')
+        || plannedVers.find(v => norm(v.maSP) === norm(g.maSP) && norm(v.bt) === norm(bt) && v.hash === h);
+      if (!ver) {
+        const pb = (maxPB[norm(g.maSP)] || 0) + 1; maxPB[norm(g.maSP)] = pb;
+        ver = { ma: maBOM(g.maSP, pb), maSP: g.maSP, pb, bt, tt: 'THAY_THE', tuPB: '', soCT: lines.length, ghiChu: '', lsx: [],
+          nguoiTao: who, tgTao: t, nguoiGui: who, tgGui: t, nguoiDuyet: who, tgDuyet: t,
+          ghiChuDuyet: 'Khởi tạo từ dữ liệu lệnh sản xuất đã có', hash: h, lines, thieuKT: thieu, isNew: true };
+        plannedVers.push(ver);
+        if (thieu) warnings.push(`${ver.ma}: ${thieu} dòng thiếu Dài/Rộng/Dày (lấy nguyên từ lệnh ${so}) – cần bổ sung khi sửa BOM`);
+      }
+      if (ver.isNew) { ver.lsx.push(so); ver.lastUse = useIdx++; }
+      if (!DB.products.some(p => norm(p.maSP) === norm(g.maSP)) && !newProducts.has(g.maSP))
+        newProducts.set(g.maSP, { maSP: g.maSP, tenSP: g.maSP, quyCach: '', ghiChu: 'Tạo tự động từ lệnh ' + so, nguoiTao: who, ngayTao: t });
+      links.push({ soLSX: so, maSP: g.maSP, ma: ver.ma, sl, bt });
+    }
+  }
+  // Trạng thái: mỗi (sản phẩm, biến thể) – bản được dùng ở lệnh gần nhất là hiện hành (nếu chưa có bản hiện hành sẵn)
+  const keys = new Set(plannedVers.map(v => norm(v.maSP) + '|' + norm(v.bt)));
+  for (const k of keys) {
+    const vs = plannedVers.filter(v => norm(v.maSP) + '|' + norm(v.bt) === k);
+    if (DB.versionsOf(vs[0].maSP, vs[0].bt).some(v => v.tt === 'DA_DUYET')) continue;
+    vs.reduce((a, b) => (b.lastUse > a.lastUse ? b : a)).tt = 'DA_DUYET';
+  }
+  plannedVers.forEach(v => { v.nguon = 'Tổng hợp từ lệnh ' + v.lsx.join(', '); });
+  return { products: [...newProducts.values()], versions: plannedVers, links, skipped, warnings: [...new Set(warnings)] };
+}
+
+/** Ghi kết quả tổng hợp: sản phẩm + phiên bản + dòng BOM + liên kết lệnh – 1 batchUpdate. */
+export async function writeImport(plan) {
+  const map = await sheetMap(), t = nowVN();
+  const reqs = [];
+  if (plan.products.length) reqs.push(appendReq(map[S.sp], H(S.sp), plan.products.map(p => ({
+    Ma_SP: p.maSP, Ten_SP: p.tenSP, Quy_Cach: p.quyCach, Ghi_Chu: p.ghiChu, Trang_Thai: 'Đang dùng', Nguoi_Tao: p.nguoiTao, Ngay_Tao: p.ngayTao }))));
+  if (plan.versions.length) {
+    reqs.push(appendReq(map[S.pb], H(S.pb), plan.versions.map(verRow)));
+    reqs.push(appendReq(map[S.bct], H(S.bct), plan.versions.flatMap(v => v.lines.map(l => lineToRow(v.ma, l)))));
+  }
+  if (plan.links.length) reqs.push(appendReq(map[S.lb], H(S.lb), plan.links.map(l => ({
+    So_LSX: l.soLSX, Ma_SP: l.maSP, Ma_BOM: l.ma, So_Luong: l.sl, Thoi_Gian: t, De_Xuat_ID: 'KHOI_TAO' }))));
+  if (reqs.length) await batchUpdate(reqs);
+}

@@ -104,9 +104,44 @@
       return o;
     });
 
+    /* ---- Sản phẩm trong lệnh & đồng bộ ----
+       Sản phẩm của 1 dòng chi tiết = phần trước " - " trong Nhãn. Số bộ lấy từ LSX_BOM (nếu có), không thì Tổng SL ÷ SL/bộ.
+       Bộ đồng bộ của 1 sản phẩm = min trên các dòng của nó: ⌊ số đã xong ở công đoạn CUỐI của phiếu ÷ SL/bộ ⌋. */
+    const lbTheoLSX = {}; (D.lb || []).forEach(x => { (lbTheoLSX[norm(x.So_LSX)] = lbTheoLSX[norm(x.So_LSX)] || []).push(x); });
+    const pbTheoMa = {}; (D.pb || []).forEach(v => { pbTheoMa[norm(v.Ma_BOM)] = v; });
+    const tenSP = {}; (D.sp || []).forEach(s => { tenSP[norm(s.Ma_SP)] = s.Ten_SP; });
+    function sanPhamCua(soLSX, ps) {
+      const g = {}, thuTu = [];
+      const nhom = ma => { const k = norm(ma); if (!g[k]) { g[k] = { maSP: ma, dong: [] }; thuTu.push(k); } return g[k]; };
+      (lbTheoLSX[norm(soLSX)] || []).forEach(x => { const o = nhom(String(x.Ma_SP).trim()); o.lk = x; });
+      ps.forEach(p => {
+        const cuoi = p.steps.length ? p.steps[p.steps.length - 1].ten : null;
+        p.lines.forEach(ln => {
+          const nh = String(ln.Nhan || ''), i = nh.indexOf(' - ');
+          const o = nhom(i > 0 ? nh.slice(0, i).trim() : '(Không rõ)');
+          const sl1 = num(ln.So_Luong_1_Bo) || 1, tong = num(ln.Tong_So_Luong);
+          const xong = cuoi ? Math.min((done[norm(ln.Ma_Dong)] || {})[cuoi] || 0, tong) : 0;
+          o.dong.push({ ln, p, cuoi, sl1, tong, xong, bo: Math.floor(xong / sl1 + 1e-9), boCan: tong / sl1, ten: i > 0 ? nh.slice(i + 3) : nh });
+        });
+      });
+      return thuTu.map(k => {
+        const o = g[k], v = o.lk ? pbTheoMa[norm(o.lk.Ma_BOM)] : null;
+        const tan = {}; o.dong.forEach(d => { const b = Math.round(d.boCan); tan[b] = (tan[b] || 0) + 1; });
+        const slDong = Object.keys(tan).sort((a, b) => tan[b] - tan[a])[0];
+        const sl = o.lk ? num(o.lk.So_Luong) : num(slDong);
+        const dongBo = o.dong.length ? Math.min(sl, ...o.dong.map(d => d.bo)) : 0;
+        const nhat = o.dong.length ? o.dong.reduce((a, d) => (d.bo < a.bo ? d : a)) : null;
+        return {
+          maSP: o.maSP, tenSP: tenSP[k] || '', sl, maBOM: o.lk ? o.lk.Ma_BOM : '', bienThe: v ? v.Bien_The : '', pb: v ? v.Phien_Ban : '',
+          dong: o.dong, dongBo, pct: sl ? dongBo / sl : 0, nhat, coLienKet: !!o.lk
+        };
+      });
+    }
+
     const homNay = new Date(); homNay.setHours(0, 0, 0, 0);
     const lsx = D.lsx.map(l => {
       const ps = psxTheoLSX[norm(l.So_LSX)] || [];
+      const sp = sanPhamCua(l.So_LSX, ps);
       const pct = ps.length ? ps.reduce((a, p) => a + p.pct, 0) / ps.length : (/HOÀN THÀNH/.test(norm(l.Trang_Thai)) ? 1 : 0);
       const han = parseNgay(l.Ngay_Hoan_Thanh);
       const huy = /HỦY|HUỶ/.test(norm(l.Trang_Thai));
@@ -114,9 +149,10 @@
       const soCT = ps.reduce((a, p) => a + p.lines.length, 0);
       return Object.assign({}, l, {
         psx: ps, pct, tre, soCT, soSL: ps.reduce((a, p) => a + p.soSL, 0),
+        sanPham: sp, boTong: sp.reduce((a, s) => a + s.sl, 0), boDongBo: sp.reduce((a, s) => a + s.dongBo, 0),
         nguoi: tenNguoi[norm(l.Nguoi_Cap_Lenh)] || l.Nguoi_Cap_Lenh,
         ownText: norm([l.So_LSX, l.Ten_LSX, l.Nguoi_Cap_Lenh, l.Trang_Thai].join(' ')),
-        searchText: norm([l.So_LSX, l.Ten_LSX, l.Nguoi_Cap_Lenh, l.Trang_Thai].join(' ')) + ' ' + ps.map(p => p.searchText).join(' ')
+        searchText: norm([l.So_LSX, l.Ten_LSX, l.Nguoi_Cap_Lenh, l.Trang_Thai].concat(sp.map(s => s.maSP + ' ' + s.tenSP)).join(' ')) + ' ' + ps.map(p => p.searchText).join(' ')
       });
     });
 
